@@ -1,0 +1,77 @@
+{
+  "name": "rapphim-warehouse-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RapPhim WareHouse cho Windows",
+  "main": "main.cjs",
+  "scripts": {
+    "check": "node --check main.cjs && node --check scripts/prepare-resources.mjs && node --check scripts/verify-resources.mjs",
+    "prepare:resources": "node scripts/prepare-resources.mjs",
+    "verify:resources": "node scripts/verify-resources.mjs",
+    "dist:win": "electron-builder --win nsis portable --x64"
+  },
+  "devDependencies": {
+    "electron": "44.4.0",
+    "electron-builder": "26.15.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "build": {
+    "appId": "vn.rapphim.warehouse",
+    "productName": "RapPhim WareHouse",
+    "asar": true,
+    "npmRebuild": false,
+    "compression": "maximum",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build-resources/backend",
+        "to": "backend"
+      },
+      {
+        "from": "build-resources/web",
+        "to": "web"
+      },
+      {
+        "from": "build-resources/jre",
+        "to": "jre"
+      },
+      {
+        "from": "build-resources/ffmpeg",
+        "to": "ffmpeg"
+      }
+    ],
+    "win": {
+      "icon": "../frontend/src/app/favicon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "artifactName": "RapPhim-WareHouse-Setup-${version}-${arch}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "RapPhim WareHouse"
+    },
+    "portable": {
+      "artifactName": "RapPhim-WareHouse-Portable-${version}-${arch}.${ext}"
+    }
+  }
+}
+
