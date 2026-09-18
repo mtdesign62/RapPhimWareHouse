@@ -38,3 +38,7 @@ data/
 # Next.js dev tu sinh (generate-agent-files), khong phai nguon
 /frontend/AGENTS.md
 /frontend/CLAUDE.md
+# Windows desktop build
+desktop/node_modules/
+desktop/build-resources/
+desktop/release/
