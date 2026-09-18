@@ -26,12 +26,22 @@ if (!webDir) {
 try {
   const serverPath = path.join(webDir, "server.js");
   const nextPath = path.join(webDir, "node_modules");
+  const nextDir = path.join(nextPath, "next");
+  const nextEntry = path.join(nextDir, "dist", "server", "next.js");
   process.env.NODE_PATH = nextPath;
   Module._initPaths();
 
   const serverModule = new Module(serverPath, module);
   serverModule.filename = serverPath;
   serverModule.paths = Module._nodeModulePaths(webDir);
+  const defaultRequire = serverModule.require.bind(serverModule);
+  serverModule.require = (request) => {
+    if (request === "next") return require(nextEntry);
+    if (request.startsWith("next/")) {
+      return require(path.join(nextDir, request.slice("next/".length)));
+    }
+    return defaultRequire(request);
+  };
   writeWebLog(`start server=${serverPath} modules=${nextPath}`);
   serverModule._compile(fs.readFileSync(serverPath, "utf8"), serverPath);
 } catch (error) {

@@ -9,6 +9,7 @@ const required = [
   "web/server.js",
   "web/web-runner.cjs",
   "web/node_modules/next/package.json",
+  "web/node_modules/next/dist/server/next.js",
   "web/.next/BUILD_ID",
   "jre/bin/java.exe",
   "ffmpeg/ffmpeg.exe",
