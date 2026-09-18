@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -29,10 +29,12 @@ if (jars.length !== 1) {
 rmSync(resourcesDir, { recursive: true, force: true });
 mkdirSync(path.join(resourcesDir, "backend"), { recursive: true });
 cpSync(path.join(backendTarget, jars[0]), path.join(resourcesDir, "backend", "app.jar"));
-cpSync(standaloneDir, path.join(resourcesDir, "web"), { recursive: true });
+const webTarget = path.join(resourcesDir, "web");
+cpSync(standaloneDir, webTarget, { recursive: true });
+renameSync(path.join(webTarget, "node_modules"), path.join(webTarget, "modules"));
 cpSync(
   path.join(desktopDir, "web-runner.cjs"),
-  path.join(resourcesDir, "web", "web-runner.cjs"),
+  path.join(webTarget, "web-runner.cjs"),
 );
 cpSync(path.join(frontendBuild, "static"), path.join(resourcesDir, "web", ".next", "static"), {
   recursive: true,

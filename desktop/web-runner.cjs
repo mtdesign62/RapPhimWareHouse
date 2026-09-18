@@ -25,7 +25,7 @@ if (!webDir) {
 
 try {
   const serverPath = path.join(webDir, "server.js");
-  const nextPath = path.join(webDir, "node_modules");
+  const nextPath = path.join(webDir, "modules");
   const nextDir = path.join(nextPath, "next");
   const nextEntry = path.join(nextDir, "dist", "server", "next.js");
   process.env.NODE_PATH = nextPath;

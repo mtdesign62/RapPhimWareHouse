@@ -94,6 +94,11 @@ jobs:
       - name: Smoke test bản Portable
         shell: pwsh
         run: |
+          $packagedNext = "desktop/release/win-unpacked/resources/web/modules/next/dist/server/next.js"
+          if (-not (Test-Path $packagedNext)) {
+            throw "Ban dong goi thieu Next server: $packagedNext"
+          }
+
           $portable = Get-ChildItem desktop/release/RapPhim-WareHouse-Portable-*.exe |
             Select-Object -First 1
           if (-not $portable) { throw "Khong tim thay ban Portable" }
