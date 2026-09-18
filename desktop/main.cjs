@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog } = require("electron");
+const { app, BrowserWindow, dialog, utilityProcess } = require("electron");
 const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const net = require("node:net");
@@ -65,6 +65,7 @@ function startProcess(name, command, args, options) {
   });
 
   child.startupError = null;
+  child.serviceExited = false;
   child.on("error", (error) => {
     child.startupError = error;
     writeLog(`${name}: spawn error ${error.message}`);
@@ -72,6 +73,7 @@ function startProcess(name, command, args, options) {
   child.stdout.on("data", (chunk) => writeLog(`${name}: ${chunk.toString().trimEnd()}`));
   child.stderr.on("data", (chunk) => writeLog(`${name}: ${chunk.toString().trimEnd()}`));
   child.on("exit", (code, signal) => {
+    child.serviceExited = true;
     children.delete(child);
     writeLog(`${name}: exit code=${code} signal=${signal}`);
     if (startupComplete && !stopping) {
@@ -88,10 +90,44 @@ function startProcess(name, command, args, options) {
   return child;
 }
 
+function startUtility(name, modulePath, options) {
+  writeLog(`${name}: utility start`);
+  const child = utilityProcess.fork(modulePath, [], {
+    ...options,
+    serviceName: "RapPhim Web Server",
+    stdio: "pipe",
+  });
+
+  child.startupError = null;
+  child.serviceExited = false;
+  child.serviceKind = "utility";
+  child.on("spawn", () => writeLog(`${name}: utility spawned pid=${child.pid}`));
+  child.on("error", (error) => {
+    child.startupError = error;
+    writeLog(`${name}: utility error ${JSON.stringify(error)}`);
+  });
+  child.stdout?.on("data", (chunk) => writeLog(`${name}: ${chunk.toString().trimEnd()}`));
+  child.stderr?.on("data", (chunk) => writeLog(`${name}: ${chunk.toString().trimEnd()}`));
+  child.on("exit", (code) => {
+    child.serviceExited = true;
+    children.delete(child);
+    writeLog(`${name}: utility exit code=${code}`);
+    if (startupComplete && !stopping) {
+      dialog.showErrorBox(
+        "RapPhim đã dừng",
+        "Giao diện ứng dụng đã dừng ngoài dự kiến. Hãy mở lại ứng dụng.",
+      );
+      app.quit();
+    }
+  });
+  children.add(child);
+  return child;
+}
+
 async function waitForService(name, url, child) {
   const deadline = Date.now() + STARTUP_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    if (child.startupError || child.exitCode !== null) {
+    if (child.startupError || child.serviceExited) {
       throw new StartupError(`${name}_START_FAILED`);
     }
     try {
@@ -185,6 +221,9 @@ async function startApplication() {
   requireFile(javaPath);
   requireFile(backendJar);
   requireFile(webServer);
+  writeLog(`runtime: exec=${process.execPath}`);
+  writeLog(`runtime: resources=${root}`);
+  writeLog(`runtime: portable=${process.env.PORTABLE_EXECUTABLE_FILE ? "yes" : "no"}`);
 
   const window = createMainWindow();
   await showLoadingPage(window);
@@ -219,15 +258,13 @@ async function startApplication() {
   );
   await waitForService("BACKEND", `${backendUrl}/actuator/health`, backend);
 
-  const web = startProcess(
+  const web = startUtility(
     "web",
-    process.execPath,
-    [webServer],
+    webServer,
     {
       cwd: webDir,
       env: {
         ...process.env,
-        ELECTRON_RUN_AS_NODE: "1",
         NODE_ENV: "production",
         HOSTNAME: "127.0.0.1",
         PORT: String(webPort),
@@ -238,23 +275,34 @@ async function startApplication() {
   await waitForService("WEB", appOrigin, web);
   await window.loadURL(appOrigin);
   startupComplete = true;
+  if (process.env.RAPPHIM_READY_FILE) {
+    fs.writeFileSync(process.env.RAPPHIM_READY_FILE, `${appOrigin}\n`);
+  }
 }
 
 function stopServices() {
   if (stopping) return;
   stopping = true;
   for (const child of children) {
-    if (!child.pid || child.exitCode !== null) continue;
-    if (process.platform === "win32") {
+    if (child.serviceExited) continue;
+    if (child.serviceKind === "utility") {
+      child.kill();
+    } else if (process.platform === "win32" && child.pid) {
       spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
         windowsHide: true,
         stdio: "ignore",
       });
-    } else {
+    } else if (child.pid) {
       child.kill("SIGTERM");
     }
   }
   children.clear();
+}
+
+if (process.env.RAPPHIM_USER_DATA_DIR) {
+  const userDataOverride = path.resolve(process.env.RAPPHIM_USER_DATA_DIR);
+  fs.mkdirSync(userDataOverride, { recursive: true });
+  app.setPath("userData", userDataOverride);
 }
 
 const hasLock = app.requestSingleInstanceLock();
