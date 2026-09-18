@@ -100,6 +100,7 @@ jobs:
 
           $userData = Join-Path $env:RUNNER_TEMP "rapphim-portable-user-data"
           $readyFile = Join-Path $env:RUNNER_TEMP "rapphim-portable-ready.txt"
+          $errorFile = "$readyFile.error"
           New-Item -ItemType Directory -Force $userData | Out-Null
           $env:RAPPHIM_USER_DATA_DIR = $userData
           $env:RAPPHIM_READY_FILE = $readyFile
@@ -111,6 +112,9 @@ jobs:
               if (Test-Path $readyFile) {
                 $ready = $true
                 break
+              }
+              if (Test-Path $errorFile) {
+                throw "Ban Portable khoi dong loi: $(Get-Content $errorFile)"
               }
               if ($process.HasExited) {
                 throw "Ban Portable da thoat som, exit=$($process.ExitCode)"
