@@ -273,6 +273,7 @@ async function startApplication() {
         PORT: String(webPort),
         API_INTERNAL_URL: backendUrl,
         RAPPHIM_WEB_DIR: webDir,
+        RAPPHIM_WEB_LOG: logFile,
       },
     },
   );
