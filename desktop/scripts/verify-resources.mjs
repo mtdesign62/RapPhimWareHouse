@@ -7,6 +7,7 @@ const root = path.join(desktopDir, "build-resources");
 const required = [
   "backend/app.jar",
   "web/server.js",
+  "web/web-runner.cjs",
   "web/node_modules/next/package.json",
   "web/.next/BUILD_ID",
   "jre/bin/java.exe",

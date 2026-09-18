@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, utilityProcess } = require("electron");
+const { app, BrowserWindow, dialog } = require("electron");
 const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const net = require("node:net");
@@ -82,40 +82,6 @@ function startProcess(name, command, args, options) {
         name === "backend"
           ? "Dịch vụ phim đã dừng ngoài dự kiến. Hãy mở lại ứng dụng."
           : "Giao diện ứng dụng đã dừng ngoài dự kiến. Hãy mở lại ứng dụng.",
-      );
-      app.quit();
-    }
-  });
-  children.add(child);
-  return child;
-}
-
-function startUtility(name, modulePath, options) {
-  writeLog(`${name}: utility start`);
-  const child = utilityProcess.fork(modulePath, [], {
-    ...options,
-    serviceName: "RapPhim Web Server",
-    stdio: "pipe",
-  });
-
-  child.startupError = null;
-  child.serviceExited = false;
-  child.serviceKind = "utility";
-  child.on("spawn", () => writeLog(`${name}: utility spawned pid=${child.pid}`));
-  child.on("error", (error) => {
-    child.startupError = error;
-    writeLog(`${name}: utility error ${JSON.stringify(error)}`);
-  });
-  child.stdout?.on("data", (chunk) => writeLog(`${name}: ${chunk.toString().trimEnd()}`));
-  child.stderr?.on("data", (chunk) => writeLog(`${name}: ${chunk.toString().trimEnd()}`));
-  child.on("exit", (code) => {
-    child.serviceExited = true;
-    children.delete(child);
-    writeLog(`${name}: utility exit code=${code}`);
-    if (startupComplete && !stopping) {
-      dialog.showErrorBox(
-        "RapPhim đã dừng",
-        "Giao diện ứng dụng đã dừng ngoài dự kiến. Hãy mở lại ứng dụng.",
       );
       app.quit();
     }
@@ -217,7 +183,7 @@ async function startApplication() {
   const backendJar = path.join(root, "backend", "app.jar");
   const webDir = path.join(root, "web");
   const webServer = path.join(webDir, "server.js");
-  const webRunner = path.join(__dirname, "web-runner.cjs");
+  const webRunner = path.join(webDir, "web-runner.cjs");
   const ffmpegDir = path.join(root, "ffmpeg");
   requireFile(javaPath);
   requireFile(backendJar);
@@ -260,13 +226,15 @@ async function startApplication() {
   );
   await waitForService("BACKEND", `${backendUrl}/actuator/health`, backend);
 
-  const web = startUtility(
+  const web = startProcess(
     "web",
-    webRunner,
+    process.execPath,
+    [webRunner],
     {
       cwd: webDir,
       env: {
         ...process.env,
+        ELECTRON_RUN_AS_NODE: "1",
         NODE_ENV: "production",
         NODE_PATH: path.join(webDir, "node_modules"),
         HOSTNAME: "127.0.0.1",
@@ -290,9 +258,7 @@ function stopServices() {
   stopping = true;
   for (const child of children) {
     if (child.serviceExited) continue;
-    if (child.serviceKind === "utility") {
-      child.kill();
-    } else if (process.platform === "win32" && child.pid) {
+    if (process.platform === "win32" && child.pid) {
       spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], {
         windowsHide: true,
         stdio: "ignore",

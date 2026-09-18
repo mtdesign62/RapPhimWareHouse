@@ -30,6 +30,10 @@ rmSync(resourcesDir, { recursive: true, force: true });
 mkdirSync(path.join(resourcesDir, "backend"), { recursive: true });
 cpSync(path.join(backendTarget, jars[0]), path.join(resourcesDir, "backend", "app.jar"));
 cpSync(standaloneDir, path.join(resourcesDir, "web"), { recursive: true });
+cpSync(
+  path.join(desktopDir, "web-runner.cjs"),
+  path.join(resourcesDir, "web", "web-runner.cjs"),
+);
 cpSync(path.join(frontendBuild, "static"), path.join(resourcesDir, "web", ".next", "static"), {
   recursive: true,
 });
@@ -40,4 +44,3 @@ if (existsSync(publicDir)) {
 }
 
 console.log(`Da chuan bi tai nguyen desktop tai ${resourcesDir}`);
-
