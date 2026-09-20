@@ -1,0 +1,110 @@
+name: Build MT Movie 2.1.3 Windows x64
+
+on:
+  push:
+    branches:
+      - chatgpt/mt-movie-2.1.3-build
+    paths:
+      - '.github/workflows/chatgpt-build-mt213.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Reconstruct source
+        shell: pwsh
+        run: |
+          $parts = Get-ChildItem ".chatgpt-build/mt-movie-2.1.3/runtime-p*" | Sort-Object Name
+          if ($parts.Count -ne 10) { throw "Expected 10 payload parts, got $($parts.Count)" }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          $bytes = [Convert]::FromBase64String($b64)
+          $archive = Join-Path $env:RUNNER_TEMP "mtmovie213-runtime.tar.xz"
+          [IO.File]::WriteAllBytes($archive, $bytes)
+          $src = Join-Path $env:RUNNER_TEMP "mtmovie213"
+          New-Item -ItemType Directory -Path $src -Force | Out-Null
+          tar -xJf $archive -C $src
+          Get-ChildItem $src
+
+      - name: Install dependencies
+        shell: pwsh
+        working-directory: ${{ runner.temp }}\mtmovie213
+        run: npm install
+
+      - name: Package Windows x64
+        shell: pwsh
+        working-directory: ${{ runner.temp }}\mtmovie213
+        run: |
+          npx electron-packager . "MT Movie" --platform=win32 --arch=x64 --out=dist --overwrite --asar --prune=true --executable-name=MT-Movie --electron-version=43.3.0
+
+      - name: Harden Electron fuses
+        shell: pwsh
+        working-directory: ${{ runner.temp }}\mtmovie213
+        run: |
+          @'
+          const path = require('node:path');
+          const { flipFuses, FuseVersion, FuseV1Options } = require('@electron/fuses');
+
+          (async () => {
+            const exe = path.join(process.cwd(), 'dist', 'MT Movie-win32-x64', 'MT-Movie.exe');
+            await flipFuses(exe, {
+              version: FuseVersion.V1,
+              [FuseV1Options.RunAsNode]: false,
+              [FuseV1Options.EnableNodeOptionsEnvironmentVariable]: false,
+              [FuseV1Options.EnableNodeCliInspectArguments]: false,
+              [FuseV1Options.EnableEmbeddedAsarIntegrityValidation]: true,
+              [FuseV1Options.OnlyLoadAppFromAsar]: true
+            });
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          '@ | Set-Content -Encoding UTF8 .\flip-fuses.js
+          node .\flip-fuses.js
+
+      - name: Prune locales and validate
+        shell: pwsh
+        working-directory: ${{ runner.temp }}\mtmovie213
+        run: |
+          $out = Join-Path (Get-Location) "dist\MT Movie-win32-x64"
+          $exe = Join-Path $out "MT-Movie.exe"
+          if (!(Test-Path $exe)) { throw "MT-Movie.exe not found" }
+
+          $locales = Join-Path $out "locales"
+          if (Test-Path $locales) {
+            Get-ChildItem $locales -Filter "*.pak" | Where-Object { $_.Name -notin @("en-US.pak", "vi.pak") } | Remove-Item -Force
+          }
+
+          Write-Host "EXE:"
+          Get-Item $exe | Format-List FullName,Length
+          Get-FileHash $exe -Algorithm SHA256 | Format-List
+
+      - name: Create portable ZIP
+        shell: pwsh
+        working-directory: ${{ runner.temp }}\mtmovie213
+        run: |
+          $src = "dist\MT Movie-win32-x64"
+          $zip = "MT-Movie-2.1.3-win32-x64.zip"
+          Compress-Archive -Path "$src\*" -DestinationPath $zip -CompressionLevel Optimal -Force
+          Get-Item $zip | Format-List FullName,Length
+          Get-FileHash $zip -Algorithm SHA256 | Format-List
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MT-Movie-2.1.3-win32-x64
+          path: ${{ runner.temp }}\mtmovie213\MT-Movie-2.1.3-win32-x64.zip
+          if-no-files-found: error
+          retention-days: 7
